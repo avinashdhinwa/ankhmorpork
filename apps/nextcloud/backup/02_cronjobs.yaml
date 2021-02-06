@@ -85,28 +85,28 @@ spec:
               - name: web
                 mountPath: /backup
                 readOnly: true
-              - name: apps
-                mountPath: /backup/custom_apps
-                readOnly: true
-              - name: config
-                mountPath: /backup/config
-                readOnly: true
-              - name: theme
-                mountPath: /backup/themes/mytheme
-                readOnly: true
+              #- name: apps
+              #  mountPath: /backup/custom_apps
+              #  readOnly: true
+              #- name: config
+              #  mountPath: /backup/config
+              #  readOnly: true
+              #- name: theme
+              #  mountPath: /backup/themes/mytheme
+              #  readOnly: true
           volumes:
             - name: web
               persistentVolumeClaim:
                 claimName: nextcloud-files
-            - name: apps
-              persistentVolumeClaim:
-                claimName: nextcloud-apps
-            - name: config
-              persistentVolumeClaim:
-                claimName: nextcloud-config
-            - name: theme
-              persistentVolumeClaim:
-                claimName: nextcloud-theme
+            #- name: apps
+            #  persistentVolumeClaim:
+            #    claimName: nextcloud-apps
+            #- name: config
+            #  persistentVolumeClaim:
+            #    claimName: nextcloud-config
+            #- name: theme
+            #  persistentVolumeClaim:
+            #    claimName: nextcloud-theme
           restartPolicy: Never
           nodeSelector:
             kubernetes.io/arch: "amd64"

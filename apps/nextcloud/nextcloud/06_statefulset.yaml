@@ -24,6 +24,49 @@ spec:
         app.kubernetes.io/part-of: nextcloud
         app.kubernetes.io/component: server
     spec:
+      # Using emptyDir for nextcloud config and application files (/var/www/html).
+      # This dir is periodically backed up to object storage and restored here on every pod start.
+      # Such approach allows to decouple storage layer and reduce reliance on network thus
+      # improving application performance. Major costs of this approach are - slower startup and
+      # possibility of configuration drift due to periodic nature of backups. Last point may be fixed
+      # by using lifecycle webhooks and backing up dir an pod exit.
+      # TODO: consider reimplementing this with local minio storage or simple tar.
+      # This would allow to use lifecycle hooks for saving configuration on container exit.
+      initContainers:
+      #- name: restore
+      #  envFrom:
+      #  - secretRef:
+      #    name: restic-repository-web
+      #  image: restic/restic
+      #  args:
+      #  - 'restore'
+      #  - 'latest'
+      #  - '--target'
+      #  - '/var/www/html'
+      #  volumeMounts:
+      #  - name: web
+      #    mountPath: /var/www/html
+      - name: local-restore
+        image: eeacms/rsync
+        command:
+        - "rsync"
+        - "-auv"
+        - "/backup/custom_apps"
+        - "/backup/config"
+        - "/backup/themes"
+        - "/var/www/html/"
+        volumeMounts:
+        - name: web
+          mountPath: /var/www/html
+        - name: backup
+          mountPath: /backup
+        # Remove next 3 after first backup is complete
+        - name: apps
+          mountPath: /backup/custom_apps
+        - name: theme
+          mountPath: /backup/themes/mytheme
+        - name: config
+          mountPath: /backup/config
       containers:
       - env:
         - name: NEXTCLOUD_ADMIN_USER
@@ -58,7 +101,12 @@ spec:
         - containerPort: 9000
           name: phpfpm
         readinessProbe:
-          tcpSocket:
+          httpGet:
+            path: /status.php
+            port: phpfpm
+        startupProbe:
+          httpGet:
+            path: /status.php
             port: phpfpm
         volumeMounts:
         - name: phpfpm-config
@@ -67,18 +115,16 @@ spec:
           mountPath: /etc/php/conf.d
         - name: web
           mountPath: /var/www/html
-        - name: apps
-          mountPath: /var/www/html/custom_apps
-        - name: theme
-          mountPath: /var/www/html/themes/mytheme
-        - name: config
-          mountPath: /var/www/html/config
         - name: data
           mountPath: /var/www/html/data
         resources:
           requests:
             cpu: 200m
             memory: 300Mi
+        lifecycle:
+          preStop:
+            exec:
+              command: ["rsync", "-au", "/var/www/html/custom_apps", "/var/www/html/config", "/var/www/html/themes", "/backup/"]
       - env:
         - name: PHP_FPM_SCRAPE_URI
           value: "tcp://127.0.0.1:9000/status"
@@ -106,8 +152,11 @@ spec:
         persistentVolumeClaim:
           claimName: nextcloud-data
       - name: web
+        emptyDir: {}
+      - name: backup
         persistentVolumeClaim:
           claimName: nextcloud-files
+      # TODO: remove next 3
       - name: apps
         persistentVolumeClaim:
           claimName: nextcloud-apps
@@ -116,7 +165,6 @@ spec:
           claimName: nextcloud-theme
       - name: config
         persistentVolumeClaim:
-          claimName: nextcloud-config
+          claimName: nextcloud-config  
       nodeSelector:
         kubernetes.io/arch: "amd64"
-
